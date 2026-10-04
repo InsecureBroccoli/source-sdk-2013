@@ -40,6 +40,7 @@ private:
 	float m_totalSurfaceArea;
 	void CollectBuildAreas( CTFBot *me );
 	bool CollectBuildAreasBehindCart( CTFBot *me, CTeamTrainWatcher *trainWatcher );
+	bool CollectBuildAreasForMvM( CTFBot *me );
 	void ComputeTotalSurfaceArea( void );
 
 	void SelectBuildLocation( CTFBot *me );

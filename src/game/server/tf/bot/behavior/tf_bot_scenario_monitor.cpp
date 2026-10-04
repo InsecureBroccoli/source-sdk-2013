@@ -47,6 +47,7 @@
 #include "bot/behavior/tf_bot_escort.h"
 #include "bot/behavior/scenario/capture_the_flag/tf_bot_fetch_flag.h"
 #include "bot/behavior/scenario/capture_the_flag/tf_bot_deliver_flag.h"
+#include "bot/behavior/scenario/mann_vs_machine/tf_bot_mvm_defend.h"
 
 #include "bot/behavior/missions/tf_bot_mission_suicide_bomber.h"
 #include "bot/behavior/squad/tf_bot_escort_squad_leader.h"
@@ -178,6 +179,32 @@ Action< CTFBot > *CTFBotScenarioMonitor::DesiredScenarioAndClassAction( CTFBot *
 
 	if ( TFGameRules()->IsMannVsMachineMode() )
 	{
+		if ( me->GetTeamNumber() == TF_TEAM_PVE_DEFENDERS )
+		{
+			// we're defending the bomb hatch from the robots
+			if ( me->IsPlayerClass( TF_CLASS_SPY ) )
+			{
+				return new CTFBotSpyInfiltrate;
+			}
+
+			if ( me->IsPlayerClass( TF_CLASS_SNIPER ) )
+			{
+				return new CTFBotSniperLurk;
+			}
+
+			if ( me->IsPlayerClass( TF_CLASS_MEDIC ) )
+			{
+				return new CTFBotMedicHeal;
+			}
+
+			if ( me->IsPlayerClass( TF_CLASS_ENGINEER ) )
+			{
+				return new CTFBotEngineerBuild;
+			}
+
+			return new CTFBotMvMDefend;
+		}
+
 		if ( me->IsPlayerClass( TF_CLASS_SPY ) )
 		{
 			return new CTFBotSpyLeaveSpawnRoom;

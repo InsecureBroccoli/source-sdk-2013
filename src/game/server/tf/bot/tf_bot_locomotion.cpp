@@ -41,11 +41,11 @@ void CTFBotLocomotion::Update( void )
 // Move directly towards the given position
 void CTFBotLocomotion::Approach( const Vector &pos, float goalWeight )
 {
-	if ( TFGameRules()->IsMannVsMachineMode() )
+	if ( TFGameRules()->IsMannVsMachineMode() && GetBot()->GetEntity()->GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 	{
 		if ( !IsOnGround() && !IsClimbingOrJumping() )
 		{
-			// no air control
+			// robots have no air control
 			return;
 		}
 	}

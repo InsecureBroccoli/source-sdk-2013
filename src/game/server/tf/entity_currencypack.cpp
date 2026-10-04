@@ -278,7 +278,9 @@ bool CCurrencyPack::MyTouch( CBasePlayer *pPlayer )
 		if ( !pTFTouchPlayer )
 			return false;
 
-		if ( pTFTouchPlayer->IsBot() )
+		// robots can't pick up money, but bots defending against them collect it for their team like players do
+		bool bIsDefendingBot = TFGameRules() && TFGameRules()->IsMannVsMachineMode() && pTFTouchPlayer->GetTeamNumber() == TF_TEAM_PVE_DEFENDERS;
+		if ( pTFTouchPlayer->IsBot() && !bIsDefendingBot )
 			return false;
 
 		if ( TFGameRules() && TFGameRules()->IsMannVsMachineMode() )

@@ -20,7 +20,7 @@ ConVar tf_bot_sniper_choose_target_interval( "tf_bot_sniper_choose_target_interv
 // Update internal state
 void CTFBotVision::Update( void )
 {
-	if ( TFGameRules()->IsMannVsMachineMode() )
+	if ( TFGameRules()->IsMannVsMachineMode() && GetBot()->GetEntity()->GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 	{
 		// Throttle vision update rate of robots in MvM for perf at the expense of reaction times
 		if ( !m_scanTimer.IsElapsed() )
@@ -406,7 +406,7 @@ bool CTFBotVision::IsVisibleEntityNoticed( CBaseEntity *subject ) const
 			return true;
 		}
 
-		if ( !TFGameRules()->IsMannVsMachineMode() )	// ignore in MvM mode
+		if ( !TFGameRules()->IsMannVsMachineMode() || me->GetTeamNumber() != TF_TEAM_PVE_INVADERS )	// robots ignore this in MvM mode
 		{
 			if ( player->IsPlacingSapper() )
 			{

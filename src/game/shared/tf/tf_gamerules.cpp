@@ -21425,6 +21425,10 @@ int CTFGameRules::GetTeamAssignmentOverride( CTFPlayer *pTFPlayer, int iDesiredT
 				if ( !pPlayer || ( pPlayer->GetTeamNumber() != TF_TEAM_PVE_DEFENDERS ) )
 					{ continue; }
 
+				// bots defending alongside players don't take up player slots
+				if ( pPlayer->IsBot() )
+					{ continue; }
+
 				CSteamID steamID;
 				if ( pPlayer->GetSteamID( &steamID ) && GTFGCClientSystem()->GetLiveMatchPlayer( steamID ) )
 					{ continue; }

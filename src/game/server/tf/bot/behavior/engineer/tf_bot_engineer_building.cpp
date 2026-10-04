@@ -296,10 +296,14 @@ bool CTFBotEngineerBuilding::IsMetalSourceNearby( CTFBot *me ) const
 
 //---------------------------------------------------------------------------------------------
 // On payload, our nest moves up with the cart - wait until it's far enough from our
-// teleporter entrance for an exit to be worth building
+// teleporter entrance for an exit to be worth building. In MvM, our nest can be right
+// beside our spawn, since the bomb hatch is often near it.
 bool CTFBotEngineerBuilding::IsTooCloseForTeleportExit( CTFBot *me, CObjectTeleporter *myTeleportEntrance ) const
 {
-	if ( TFGameRules()->GetGameType() != TF_GAMETYPE_ESCORT || me->GetTeamNumber() != TF_TEAM_BLUE )
+	bool isPushingCart = ( TFGameRules()->GetGameType() == TF_GAMETYPE_ESCORT && me->GetTeamNumber() == TF_TEAM_BLUE );
+	bool isDefendingHatch = ( TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_DEFENDERS );
+
+	if ( !isPushingCart && !isDefendingHatch )
 		return false;
 
 	myTeleportEntrance->UpdateLastKnownArea();

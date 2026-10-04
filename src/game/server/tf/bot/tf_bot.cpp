@@ -1582,7 +1582,15 @@ void CTFBot::ChangeTeam( int iTeamNum, bool bAutoTeam, bool bSilent, bool bAutoB
 	if ( TFGameRules()->IsMannVsMachineMode() )
 	{
 		SetPrevMission( CTFBot::NO_MISSION );
+
+		// keep track of whether the bot quota added us, or it will think it still needs to add more bots
+		bool isQuotaManaged = HasAttribute( CTFBot::QUOTA_MANANGED );
 		ClearAllAttributes();
+		if ( isQuotaManaged )
+		{
+			SetAttribute( CTFBot::QUOTA_MANANGED );
+		}
+
 		// Clear Sound
 		StopIdleSound();
 	}
@@ -1713,9 +1721,10 @@ void CTFBot::Event_Killed( const CTakeDamageInfo &info )
 		GetProxy()->OnKilled();
 	}
 
-	// announce Spies
-	if ( TFGameRules()->IsMannVsMachineMode() )
+	// robot bookkeeping - bots defending against the robots keep their buildings when they die, like players do
+	if ( TFGameRules()->IsMannVsMachineMode() && GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 	{
+		// announce Spies
 		if ( IsPlayerClass( TF_CLASS_SPY ) )
 		{
 			CUtlVector< CTFPlayer * > playerVector;
@@ -3297,8 +3306,8 @@ void CTFBot::EquipBestWeaponForThreat( const CKnownEntity *threat )
 		secondary = NULL;
 	}
 
-	// no secondary weapons in MvM
-	if ( TFGameRules()->IsMannVsMachineMode() )
+	// no secondary weapons for robots in MvM
+	if ( TFGameRules()->IsMannVsMachineMode() && GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 	{
 		if ( IsPlayerClass( TF_CLASS_MEDIC ) && IsInASquad() && GetSquad() && !GetSquad()->IsLeader( this ) )
 		{
@@ -3444,8 +3453,8 @@ void CTFBot::EquipBestWeaponForThreat( const CKnownEntity *threat )
 // NOTE: This assumes default weapon loadouts
 bool CTFBot::EquipLongRangeWeapon( void )
 {
-	// no secondary weapons in MvM
-	if ( TFGameRules()->IsMannVsMachineMode() )
+	// no secondary weapons for robots in MvM
+	if ( TFGameRules()->IsMannVsMachineMode() && GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 		return false;
 
 	if ( IsPlayerClass( TF_CLASS_SOLDIER ) || 

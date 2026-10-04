@@ -598,6 +598,12 @@ $Project "Server (TF)"
 							$File	"tf\bot\behavior\scenario\capture_the_flag\tf_bot_attack_flag_defenders.cpp"
 							$File	"tf\bot\behavior\scenario\capture_the_flag\tf_bot_attack_flag_defenders.h"
 						}
+
+						$Folder	"MannVsMachine"
+						{
+							$File	"tf\bot\behavior\scenario\mann_vs_machine\tf_bot_mvm_defend.cpp"
+							$File	"tf\bot\behavior\scenario\mann_vs_machine\tf_bot_mvm_defend.h"
+						}
 					}
 					
 					$Folder	"Engineer"

@@ -1076,9 +1076,9 @@ const CKnownEntity *CTFBotMainAction::SelectMoreDangerousThreatInternal( const I
 	// close range sentries are the most dangerous of all
 	bool shouldFearSentryGuns = true;
 
-	if ( TFGameRules()->IsMannVsMachineMode() )
+	if ( TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 	{
-		// MvM bots are not afraid of sentry guns and treat them like other enemy players
+		// MvM robots are not afraid of sentry guns and treat them like other enemy players
 		shouldFearSentryGuns = false;
 	}
 
@@ -1179,9 +1179,9 @@ const CKnownEntity *CTFBotMainAction::SelectMoreDangerousThreatInternal( const I
 //---------------------------------------------------------------------------------------------
 QueryResultType CTFBotMainAction::ShouldAttack( const INextBot *meBot, const CKnownEntity *them ) const
 {
-	if ( g_pPopulationManager )
+	if ( g_pPopulationManager && meBot->GetEntity()->GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 	{
-		// if I'm in my spawn room, obey the population manager's attack restrictions
+		// if I'm a robot in my spawn room, obey the population manager's attack restrictions
 		CTFBot *me = ToTFBot( meBot->GetEntity() );
 		CTFNavArea *myArea = me->GetLastKnownArea();
 		int spawnRoomFlag = me->GetTeamNumber() == TF_TEAM_RED ? TF_NAV_SPAWN_ROOM_RED : TF_NAV_SPAWN_ROOM_BLUE;
@@ -1199,9 +1199,9 @@ QueryResultType CTFBotMainAction::ShouldAttack( const INextBot *meBot, const CKn
 //---------------------------------------------------------------------------------------------
 QueryResultType	CTFBotMainAction::ShouldHurry( const INextBot *meBot ) const
 {
-	if ( g_pPopulationManager )
+	if ( g_pPopulationManager && meBot->GetEntity()->GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 	{
-		// if I'm in my spawn room, obey the population manager's attack restrictions
+		// if I'm a robot in my spawn room, obey the population manager's attack restrictions
 		CTFBot *me = ToTFBot( meBot->GetEntity() );
 		CTFNavArea *myArea = me->GetLastKnownArea();
 		int spawnRoomFlag = me->GetTeamNumber() == TF_TEAM_RED ? TF_NAV_SPAWN_ROOM_RED : TF_NAV_SPAWN_ROOM_BLUE;
@@ -1343,8 +1343,8 @@ void CTFBotMainAction::FireWeaponAtEnemy( CTFBot *me )
 		return;
 	}
 
-	// limit range of hitscan weapon fire in MvM
-	if ( TFGameRules()->IsMannVsMachineMode() && !me->IsPlayerClass( TF_CLASS_SNIPER ) && me->IsHitScanWeapon( myWeapon ) )
+	// limit range of robots' hitscan weapon fire in MvM
+	if ( TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_INVADERS && !me->IsPlayerClass( TF_CLASS_SNIPER ) && me->IsHitScanWeapon( myWeapon ) )
 	{
 		if ( me->IsRangeGreaterThan( threat->GetEntity(), tf_bot_hitscan_range_limit.GetFloat() ) )
 		{
@@ -1389,7 +1389,8 @@ void CTFBotMainAction::FireWeaponAtEnemy( CTFBot *me )
 			// only fire if zoomed in
 			if ( me->m_Shared.InCond( TF_COND_ZOOMED ) )
 			{
-				const float reactionTime = TFGameRules()->IsMannVsMachineMode() ? 0.5f : 0.1f;	// just a moment to stop headshots when obviously panning too fast to see
+				bool isRobot = TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_INVADERS;
+				const float reactionTime = isRobot ? 0.5f : 0.1f;	// just a moment to stop headshots when obviously panning too fast to see
 				if ( m_steadyTimer.HasStarted() && m_steadyTimer.IsGreaterThen( reactionTime ) )
 				{
 					trace_t trace;

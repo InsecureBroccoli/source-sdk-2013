@@ -18,6 +18,7 @@
 #include "bot/behavior/tf_bot_get_ammo.h"
 #include "bot/behavior/tf_bot_retreat_to_cover.h"
 #include "bot/behavior/engineer/tf_bot_engineer_build_teleport_exit.h"
+#include "bot/behavior/scenario/mann_vs_machine/tf_bot_mvm_defend.h"
 #include "trigger_area_capture.h"
 
 #include "raid/tf_raid_logic.h"
@@ -31,6 +32,8 @@ ConVar tf_bot_min_teleport_travel( "tf_bot_min_teleport_travel", "3000", FCVAR_C
 ConVar tf_bot_engineer_build_behind_cart_min( "tf_bot_engineer_build_behind_cart_min", "300", FCVAR_CHEAT, "On payload, engineer bots pushing the cart build at least this far behind it, along the track" );
 ConVar tf_bot_engineer_build_behind_cart_max( "tf_bot_engineer_build_behind_cart_max", "700", FCVAR_CHEAT, "On payload, engineer bots pushing the cart build at most this far behind it, along the track" );
 ConVar tf_bot_engineer_move_up_behind_cart( "tf_bot_engineer_move_up_behind_cart", "1000", FCVAR_CHEAT, "On payload, engineer bots pushing the cart move their nest up once it's this far behind the cart (always at least 100 more than tf_bot_engineer_build_behind_cart_max)" );
+ConVar tf_bot_engineer_mvm_build_min( "tf_bot_engineer_mvm_build_min", "0.25", FCVAR_CHEAT, "In MvM, engineer bots cover the robots' route to the bomb hatch starting at this fraction of the way from the hatch to the robots" );
+ConVar tf_bot_engineer_mvm_build_max( "tf_bot_engineer_mvm_build_max", "0.5", FCVAR_CHEAT, "In MvM, engineer bots cover the robots' route to the bomb hatch up to this fraction of the way from the hatch to the robots, and never build farther out" );
 
 //--------------------------------------------------------------------------------------------------------
 static Vector s_pointCentroid;
@@ -131,6 +134,133 @@ float CTFBotEngineerMoveToBuild::GetMoveUpDistanceBehindCart( void )
 
 
 //---------------------------------------------------------------------------------------------
+// In MvM, collect areas beside the robots' route to the bomb hatch, partway between the robots and
+// the hatch, that our sentry can cover the route from. Return false if there aren't any.
+bool CTFBotEngineerMoveToBuild::CollectBuildAreasForMvM( CTFBot *me )
+{
+	CUtlVector< CTFNavArea * > routeVector;
+	if ( !CollectMvMRobotRoute( &routeVector ) )
+		return false;
+
+	float robotsFromHatch = routeVector[0]->GetTravelDistanceToBombTarget();
+	float minFromHatch = tf_bot_engineer_mvm_build_min.GetFloat() * robotsFromHatch;
+	float maxFromHatch = tf_bot_engineer_mvm_build_max.GetFloat() * robotsFromHatch;
+
+	// collect the part of the route we want our sentry to cover
+	CUtlVector< CTFNavArea * > coverVector;
+	CTFNavArea *closestToRangeArea = NULL;
+	float closestToRange = FLT_MAX;
+
+	FOR_EACH_VEC( routeVector, i )
+	{
+		CTFNavArea *area = routeVector[i];
+
+		if ( area->HasAttributeTF( TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE ) )
+			continue;
+
+		float fromHatch = area->GetTravelDistanceToBombTarget();
+
+		if ( fromHatch >= minFromHatch && fromHatch <= maxFromHatch )
+		{
+			coverVector.AddToTail( area );
+		}
+
+		float outOfRange = MAX( minFromHatch - fromHatch, fromHatch - maxFromHatch );
+		if ( outOfRange < closestToRange )
+		{
+			closestToRangeArea = area;
+			closestToRange = outOfRange;
+		}
+	}
+
+	if ( coverVector.Count() == 0 )
+	{
+		// large nav areas can step right over that part of the route - cover whatever is closest to it
+		if ( !closestToRangeArea )
+			return false;
+
+		coverVector.AddToTail( closestToRangeArea );
+	}
+
+	// never set up farther out than the part of the route we're covering
+	float maxBuildFromHatch = 0.0f;
+	FOR_EACH_VEC( coverVector, i )
+	{
+		maxBuildFromHatch = MAX( maxBuildFromHatch, coverVector[i]->GetTravelDistanceToBombTarget() );
+	}
+
+	const float maxCoverRange = 800.0f;			// well within our sentry's range
+	const float routeClearance = 100.0f;		// out of the robots' way, since giants destroy dispensers they bump into
+	const float sentryEyeHeight = 60.0f;
+	const float maxDropDown = 200.0f;
+
+	CUtlVector< CNavArea * > nearbyAreaVector;
+	FOR_EACH_VEC( coverVector, i )
+	{
+		CUtlVector< CNavArea * > nearCoverVector;
+		CollectSurroundingAreas( &nearCoverVector, coverVector[i], maxCoverRange, TF_PLAYER_JUMP_HEIGHT, maxDropDown );
+
+		FOR_EACH_VEC( nearCoverVector, j )
+		{
+			if ( !nearbyAreaVector.HasElement( nearCoverVector[j] ) )
+			{
+				nearbyAreaVector.AddToTail( nearCoverVector[j] );
+			}
+		}
+	}
+
+	for( int pass=0; pass<2 && m_sentryAreaVector.Count() == 0; ++pass )
+	{
+		// if nothing fits, accept spots on the route or without a view of it
+		bool isRelaxed = ( pass > 0 );
+
+		FOR_EACH_VEC( nearbyAreaVector, i )
+		{
+			CTFNavArea *area = (CTFNavArea *)nearbyAreaVector[i];
+
+			// nothing can be built in a spawn room
+			if ( area->HasAttributeTF( TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE ) )
+				continue;
+
+			float fromHatch = area->GetTravelDistanceToBombTarget();
+			if ( fromHatch < 0.0f || fromHatch > maxBuildFromHatch )
+				continue;
+
+			if ( !isRelaxed )
+			{
+				if ( routeVector.HasElement( area ) )
+					continue;
+
+				// find the part of the route we'd cover from here
+				CTFNavArea *coverArea = NULL;
+				float coverRange = FLT_MAX;
+				FOR_EACH_VEC( coverVector, c )
+				{
+					float range = ( coverVector[c]->GetCenter() - area->GetCenter() ).Length();
+					if ( range < coverRange )
+					{
+						coverArea = coverVector[c];
+						coverRange = range;
+					}
+				}
+
+				if ( coverRange < routeClearance || coverRange > maxCoverRange )
+					continue;
+
+				// our sentry needs a clear shot at the robots walking by
+				if ( !me->IsLineOfFireClear( area->GetCenter() + Vector( 0, 0, sentryEyeHeight ), coverArea->GetCenter() + Vector( 0, 0, sentryEyeHeight ) ) )
+					continue;
+			}
+
+			m_sentryAreaVector.AddToTail( area );
+		}
+	}
+
+	return m_sentryAreaVector.Count() > 0;
+}
+
+
+//---------------------------------------------------------------------------------------------
 void CTFBotEngineerMoveToBuild::ComputeTotalSurfaceArea( void )
 {
 	m_totalSurfaceArea = 0.0f;
@@ -156,6 +286,20 @@ void CTFBotEngineerMoveToBuild::CollectBuildAreas( CTFBot *me )
 		return;
 
 	m_sentryAreaVector.RemoveAll();
+
+	if ( TFGameRules()->IsMannVsMachineMode() )
+	{
+		// cover the robots' route to the bomb hatch
+		CollectBuildAreasForMvM( me );
+
+		if ( tf_bot_debug_sentry_placement.GetBool() )
+		{
+			Msg( "%s: %d places to build along the robots' route\n", me->GetPlayerName(), m_sentryAreaVector.Count() );
+		}
+
+		ComputeTotalSurfaceArea();
+		return;
+	}
 
 	CUtlVector< CTFNavArea * > pointAreaVector;
 	Vector pointCentroid = vec3_origin;
@@ -534,7 +678,8 @@ ActionResult< CTFBot >	CTFBotEngineerMoveToBuild::Update( CTFBot *me, float inte
 		}
 	}
 
-	// the cart keeps moving while we walk to our build spot - if it has left the spot too far behind, pick a new one
+	// the cart (or in MvM, the robots) keeps moving while we walk to our build spot - if our spot
+	// gets left too far behind, pick a new one
 	if ( m_sentryBuildHint == NULL && m_buildLocationCheckTimer.IsElapsed() )
 	{
 		m_buildLocationCheckTimer.Start( 1.0f );
@@ -547,6 +692,17 @@ ActionResult< CTFBot >	CTFBotEngineerMoveToBuild::Update( CTFBot *me, float inte
 
 			if ( trainWatcher->GetTrainDistanceAlongTrack() - alongTrack > GetMoveUpDistanceBehindCart() )
 			{
+				SelectBuildLocation( me );
+			}
+		}
+		else if ( TFGameRules()->IsMannVsMachineMode() )
+		{
+			CTFNavArea *pushArea = FindMvMRobotPushArea();
+			CTFNavArea *buildArea = (CTFNavArea *)TheTFNavMesh()->GetNearestNavArea( m_sentryBuildLocation );
+
+			if ( pushArea && buildArea && buildArea->GetTravelDistanceToBombTarget() > pushArea->GetTravelDistanceToBombTarget() )
+			{
+				// the robots are already closer to the hatch than our spot
 				SelectBuildLocation( me );
 			}
 		}

@@ -15,6 +15,7 @@
 #include "bot/behavior/sniper/tf_bot_sniper_attack.h"
 #include "bot/behavior/tf_bot_retreat_to_cover.h"
 #include "bot/behavior/tf_bot_melee_attack.h"
+#include "bot/behavior/scenario/mann_vs_machine/tf_bot_mvm_defend.h"
 #include "bot/map_entities/tf_bot_hint.h"
 
 #include "nav_mesh.h"
@@ -23,6 +24,7 @@ extern ConVar tf_bot_path_lookahead_range;
 extern ConVar tf_bot_sniper_flee_range;
 extern ConVar tf_bot_sniper_melee_range;
 extern ConVar tf_bot_debug_sniper;
+extern ConVar tf_bot_mvm_defend_distance_scale;
 
 extern float SkewedRandomValue( void );
 
@@ -450,6 +452,20 @@ bool CTFBotSniperLurk::FindNewHome( CTFBot *me )
 		if ( FindHint( me ) )
 		{
 			return true;
+		}
+
+		if ( TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_DEFENDERS )
+		{
+			// hang back on the robots' route to the bomb hatch, well ahead of them
+			const float sniperDistanceAheadOfRobots = 1500.0f;
+
+			CTFNavArea *defenseArea = FindMvMDefenseArea( sniperDistanceAheadOfRobots * tf_bot_mvm_defend_distance_scale.GetFloat() );
+			if ( defenseArea )
+			{
+				m_homePosition = defenseArea->GetRandomPoint();
+				m_isHomePositionValid = true;
+				return true;
+			}
 		}
 
 		// pick a sniper spot from our ongoing search

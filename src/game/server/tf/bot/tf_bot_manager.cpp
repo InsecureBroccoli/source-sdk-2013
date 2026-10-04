@@ -29,6 +29,7 @@ ConVar tf_bot_join_after_player( "tf_bot_join_after_player", "1", FCVAR_NONE, "I
 ConVar tf_bot_auto_vacate( "tf_bot_auto_vacate", "1", FCVAR_NONE, "If nonzero, bots will automatically leave to make room for human players." );
 ConVar tf_bot_offline_practice( "tf_bot_offline_practice", "0", FCVAR_NONE, "Tells the server that it is in offline practice mode." );
 ConVar tf_bot_melee_only( "tf_bot_melee_only", "0", FCVAR_GAMEDLL, "If nonzero, TFBots will only use melee weapons" );
+ConVar tf_bot_mvm_auto_ready_delay( "tf_bot_mvm_auto_ready_delay", "20", FCVAR_CHEAT, "In MvM, if no players are defending, the defending bots ready up for the next wave after this many seconds" );
 
 extern const char *GetRandomBotName( void );
 extern void CreateBotName( int iTeam, int iClassIndex, CTFBot::DifficultyType skill, char* pBuffer, int iBufferSize );
@@ -152,6 +153,8 @@ void CTFBotManager::OnRoundRestart( void )
 void CTFBotManager::Update()
 {
 	MaintainBotQuota();
+
+	UpdateMvMDefenderReadyState();
 
 	DrawStuckBotData();
 
@@ -540,6 +543,80 @@ void CTFBotManager::MaintainBotQuota()
 
 
 //----------------------------------------------------------------------------------------------------------------
+// Bots defending in MvM ready up for the next wave once the players defending with them have,
+// or on their own after a delay if there aren't any
+void CTFBotManager::UpdateMvMDefenderReadyState( void )
+{
+	if ( !TFGameRules() || !TFGameRules()->IsMannVsMachineMode() )
+		return;
+
+	if ( TFGameRules()->State_Get() != GR_STATE_BETWEEN_RNDS )
+	{
+		m_mvmAutoReadyTimer.Invalidate();
+		return;
+	}
+
+	if ( !m_mvmReadyCheckTimer.IsElapsed() )
+		return;
+
+	m_mvmReadyCheckTimer.Start( 1.0f );
+
+	CUtlVector< CTFPlayer * > defenderVector;
+	CollectPlayers( &defenderVector, TF_TEAM_PVE_DEFENDERS );
+
+	CUtlVector< CTFBot * > botVector;
+	int humanCount = 0;
+	bool areHumansReady = true;
+
+	FOR_EACH_VEC( defenderVector, i )
+	{
+		CTFPlayer *player = defenderVector[i];
+
+		if ( player->IsBot() )
+		{
+			CTFBot *bot = ToTFBot( player );
+			if ( bot )
+			{
+				botVector.AddToTail( bot );
+			}
+		}
+		else
+		{
+			++humanCount;
+
+			if ( !TFGameRules()->IsPlayerReady( player->entindex() ) )
+			{
+				areHumansReady = false;
+			}
+		}
+	}
+
+	bool shouldBeReady;
+
+	if ( humanCount > 0 )
+	{
+		// follow the players' lead
+		shouldBeReady = areHumansReady;
+	}
+	else
+	{
+		// give our engineers time to rebuild, then start the next wave ourselves
+		if ( !m_mvmAutoReadyTimer.HasStarted() )
+		{
+			m_mvmAutoReadyTimer.Start( tf_bot_mvm_auto_ready_delay.GetFloat() );
+		}
+
+		shouldBeReady = m_mvmAutoReadyTimer.IsElapsed();
+	}
+
+	FOR_EACH_VEC( botVector, i )
+	{
+		TFGameRules()->PlayerReadyStatus_UpdatePlayerState( botVector[i], shouldBeReady );
+	}
+}
+
+
+//----------------------------------------------------------------------------------------------------------------
 bool CTFBotManager::IsAllBotTeam( int iTeam )
 {
 	CTeam *pTeam = GetGlobalTeam( iTeam );
@@ -621,6 +698,10 @@ void CTFBotManager::LevelShutdown()
 //----------------------------------------------------------------------------------------------------------------
 CTFBot* CTFBotManager::GetAvailableBotFromPool()
 {
+	// in MvM, the bots waiting in spectator are the population manager's pool of robots
+	if ( TFGameRules() && TFGameRules()->IsMannVsMachineMode() )
+		return NULL;
+
 	for ( int i = 1; i <= gpGlobals->maxClients; ++i )
 	{
 		CTFPlayer *pPlayer = ToTFPlayer( UTIL_PlayerByIndex( i ) );

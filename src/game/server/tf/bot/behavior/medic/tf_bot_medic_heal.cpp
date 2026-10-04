@@ -506,7 +506,7 @@ ActionResult< CTFBot >	CTFBotMedicHeal::Update( CTFBot *me, float interval )
 	{
 		// no patients
 
-		if ( TFGameRules()->IsMannVsMachineMode() )
+		if ( TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 		{
 			// no-one is left to heal - get the flag!
 			return ChangeTo( new CTFBotFetchFlag, "Everyone is gone! Going for the flag" );

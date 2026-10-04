@@ -26,7 +26,8 @@ ConVar tf_raid_engineer_infinte_metal( "tf_raid_engineer_infinte_metal", "1", FC
 //---------------------------------------------------------------------------------------------
 Action< CTFBot > *CTFBotEngineerBuild::InitialContainedAction( CTFBot *me )
 {
-	if ( TFGameRules()->IsPVEModeActive() )
+	// in MvM, we defend against the robots like a player would, teleporter and all
+	if ( TFGameRules()->IsPVEModeActive() && !TFGameRules()->IsMannVsMachineMode() )
 	{
 		return new CTFBotEngineerMoveToBuild;
 	}
@@ -45,7 +46,7 @@ ActionResult< CTFBot >	CTFBotEngineerBuild::OnStart( CTFBot *me, Action< CTFBot 
 //---------------------------------------------------------------------------------------------
 ActionResult< CTFBot >	CTFBotEngineerBuild::Update( CTFBot *me, float interval )
 {
-	if ( TFGameRules()->IsPVEModeActive() && tf_raid_engineer_infinte_metal.GetBool() )
+	if ( TFGameRules()->IsPVEModeActive() && !TFGameRules()->IsMannVsMachineMode() && tf_raid_engineer_infinte_metal.GetBool() )
 	{
 		// infinite ammo
 		me->GiveAmmo( 1000, TF_AMMO_METAL, true );

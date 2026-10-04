@@ -218,7 +218,7 @@ ActionResult< CTFBot >	CTFBotSpyAttack::Update( CTFBot *me, float interval )
 						isMovingTowardVictim = false;
 					}
 				}
-				else if ( TFGameRules()->IsMannVsMachineMode() )
+				else if ( TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 				{
 					if ( m_chuckleTimer.IsElapsed() )
 					{

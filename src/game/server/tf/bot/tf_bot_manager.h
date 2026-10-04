@@ -112,6 +112,10 @@ protected:
 
 	float m_flNextPeriodicThink;
 
+	void UpdateMvMDefenderReadyState( void );		// bots defending in MvM ready up for the next wave
+	CountdownTimer m_mvmReadyCheckTimer;
+	CountdownTimer m_mvmAutoReadyTimer;
+
 #ifdef TF_CREEP_MODE
 	void UpdateCreepWaves();
 	CountdownTimer m_creepWaveTimer;

@@ -11398,10 +11398,10 @@ int CTFPlayer::CanBuild( int iObjectType, int iObjectMode )
 		}
 	}
 
-	// Allow MVM engineer bots to have multiple sentries.  Currently they only need this so
+	// Allow MVM robot engineers to have multiple sentries.  Currently they only need this so
 	// they can appear to be carrying a new building when advancing their nest rather than
 	// transporting an existing building.
-	if( TFGameRules() && TFGameRules()->IsMannVsMachineMode() && IsBot() )
+	if( TFGameRules() && TFGameRules()->IsMannVsMachineMode() && IsBot() && GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 	{
 		return CB_CAN_BUILD;
 	}

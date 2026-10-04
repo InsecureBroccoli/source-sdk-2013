@@ -59,6 +59,8 @@ game/*/textwindow_temp.html
 game/*/cfg/local_loadout.txt
 game/*/cfg/server_blacklist.txt
 game/*/cfg/settings.scr
+game/*/cfg/user.scr
+game/*/tf2_playerstats.dmx
 game/*/media/viewed.res
 game/*/downloadlists/
 game/*/download/

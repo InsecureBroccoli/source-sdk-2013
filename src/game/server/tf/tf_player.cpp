@@ -12194,7 +12194,8 @@ void CTFPlayer::Event_Killed( const CTakeDamageInfo &info )
 	{
 		MannVsMachineStats_PlayerEvent_Died( this );
 
-		if ( IsBot() )
+		// robots drop their money - bots defending against them keep it, like players do
+		if ( IsBot() && GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 		{
 			m_nCurrency = 0;
 			if ( !IsMissionEnemy() && m_pWaveSpawnPopulator )
@@ -12892,8 +12893,8 @@ void CTFPlayer::Event_Killed( const CTakeDamageInfo &info )
 	}
 
 	// Is the player inside a respawn time override volume?
-	// don't do this for MvM bots
-	if ( !TFGameRules()->IsMannVsMachineMode() || !IsBot() )
+	// don't do this for MvM robots
+	if ( !TFGameRules()->IsMannVsMachineMode() || !IsBot() || GetTeamNumber() != TF_TEAM_PVE_INVADERS )
 	{
 		FOR_EACH_VEC( ITriggerPlayerRespawnOverride::AutoList(), i )
 		{
@@ -13024,7 +13025,7 @@ void CTFPlayer::AmmoPackCleanUp( void )
 //-----------------------------------------------------------------------------
 bool CTFPlayer::ShouldDropAmmoPack()
 {
-	if ( TFGameRules()->IsMannVsMachineMode() && IsBot() )
+	if ( TFGameRules()->IsMannVsMachineMode() && IsBot() && GetTeamNumber() == TF_TEAM_PVE_INVADERS )
 		return false;
 
 	if ( TFGameRules()->IsInArenaMode() && TFGameRules()->InStalemate() == false )
