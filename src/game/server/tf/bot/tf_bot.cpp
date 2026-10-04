@@ -2247,6 +2247,18 @@ bool CTFBot::IsAnyPointBeingCaptured( void ) const
 
 
 //---------------------------------------------------------------------------------------------
+// Return true if the given position is farther down the track than the cart we're pushing
+bool CTFBot::IsAheadOfPayloadToPush( const Vector &pos ) const
+{
+	CTeamTrainWatcher *trainWatcher = TFGameRules()->GetPayloadToPush( GetTeamNumber() );
+	if ( !trainWatcher )
+		return false;
+
+	return trainWatcher->IsAheadOfTrain( pos );
+}
+
+
+//---------------------------------------------------------------------------------------------
 // Return true if we are within a short travel distance of the current point
 bool CTFBot::IsNearPoint( CTeamControlPoint *point ) const
 {

@@ -9,6 +9,7 @@
 #include "Path/NextBotPathFollow.h"
 
 class CTFBotHintSentrygun;
+class CTeamTrainWatcher;
 
 
 class CTFBotEngineerMoveToBuild : public Action< CTFBot >
@@ -26,6 +27,8 @@ public:
 
 	virtual const char *GetName( void ) const	{ return "EngineerMoveToBuild"; };
 
+	static float GetMoveUpDistanceBehindCart( void );		// on payload, how far behind the cart we're pushing our nest can get before we move it up
+
 private:
 	CHandle< CTFBotHintSentrygun > m_sentryBuildHint;
 	Vector m_sentryBuildLocation;
@@ -36,9 +39,12 @@ private:
 	CUtlVector< CTFNavArea * > m_sentryAreaVector;
 	float m_totalSurfaceArea;
 	void CollectBuildAreas( CTFBot *me );
+	bool CollectBuildAreasBehindCart( CTFBot *me, CTeamTrainWatcher *trainWatcher );
+	void ComputeTotalSurfaceArea( void );
 
 	void SelectBuildLocation( CTFBot *me );
 	CountdownTimer m_fallBackTimer;
+	CountdownTimer m_buildLocationCheckTimer;
 };
 
 #endif // TF_BOT_ENGINEER_MOVE_TO_BUILD_H

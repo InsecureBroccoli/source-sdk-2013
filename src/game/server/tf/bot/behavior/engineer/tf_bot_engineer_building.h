@@ -47,6 +47,9 @@ private:
 
 	bool m_hasBuiltSentry;
 
+	CHandle< CObjectSentrygun > m_trackedSentry;
+	IntervalTimer m_sentryAgeTimer;			// how long our current sentry has been up
+
 	enum NearbyMetalType
 	{
 		NEARBY_METAL_UNKNOWN,
@@ -64,6 +67,7 @@ private:
 
 	void UpgradeAndMaintainBuildings( CTFBot *me );
 	CBaseObject *SelectBuildingToWorkOn( CTFBot *me, CObjectSentrygun *mySentry, CObjectDispenser *myDispenser, CObjectTeleporter *myTeleportExit ) const;
+	bool IsTooCloseForTeleportExit( CTFBot *me, CObjectTeleporter *myTeleportEntrance ) const;
 	bool IsMetalSourceNearby( CTFBot *me ) const;
 };
 

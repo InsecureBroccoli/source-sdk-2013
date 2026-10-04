@@ -30,8 +30,10 @@ ConVar tf_bot_engineer_exit_near_sentry_range( "tf_bot_engineer_exit_near_sentry
 ConVar tf_bot_engineer_max_sentry_travel_distance_to_point( "tf_bot_engineer_max_sentry_travel_distance_to_point", "2500", FCVAR_CHEAT, "Maximum travel distance between a bot's Sentry gun and the currently contested point" );
 
 extern ConVar tf_bot_path_lookahead_range;
+extern ConVar tf_bot_min_teleport_travel;
 
 const int MaxPlacementAttempts = 5;
+const float MinSentryAgeToMoveUp = 20.0f;		// a new sentry hasn't had a chance to fire yet, so give it time before tearing down our nest
 
 
 //---------------------------------------------------------------------------------------------
@@ -293,6 +295,28 @@ bool CTFBotEngineerBuilding::IsMetalSourceNearby( CTFBot *me ) const
 
 
 //---------------------------------------------------------------------------------------------
+// On payload, our nest moves up with the cart - wait until it's far enough from our
+// teleporter entrance for an exit to be worth building
+bool CTFBotEngineerBuilding::IsTooCloseForTeleportExit( CTFBot *me, CObjectTeleporter *myTeleportEntrance ) const
+{
+	if ( TFGameRules()->GetGameType() != TF_GAMETYPE_ESCORT || me->GetTeamNumber() != TF_TEAM_BLUE )
+		return false;
+
+	myTeleportEntrance->UpdateLastKnownArea();
+	CTFNavArea *enterArea = (CTFNavArea *)myTeleportEntrance->GetLastKnownArea();
+	CTFNavArea *myArea = me->GetLastKnownArea();
+
+	if ( !enterArea || !myArea )
+		return false;
+
+	int myTeam = me->GetTeamNumber();
+	float travelBetween = fabs( enterArea->GetIncursionDistance( myTeam ) - myArea->GetIncursionDistance( myTeam ) );
+
+	return travelBetween < tf_bot_min_teleport_travel.GetFloat();
+}
+
+
+//---------------------------------------------------------------------------------------------
 bool CTFBotEngineerBuilding::CheckIfSentryIsOutOfPosition( CTFBot *me ) const
 {
 	// Re-evaluate if MvM ever needs something more dynamic
@@ -325,7 +349,14 @@ bool CTFBotEngineerBuilding::CheckIfSentryIsOutOfPosition( CTFBot *me ) const
 			float sentryDistanceAlongPath;
 			trainWatcher->ProjectPointOntoPath( mySentry->GetAbsOrigin(), NULL, &sentryDistanceAlongPath );
 
-			const float behindTrainTolerance = SENTRY_MAX_RANGE;
+			float behindTrainTolerance = SENTRY_MAX_RANGE;
+
+			if ( me->GetTeamNumber() == TF_TEAM_BLUE )
+			{
+				// we build behind the cart we're pushing
+				behindTrainTolerance = CTFBotEngineerMoveToBuild::GetMoveUpDistanceBehindCart();
+			}
+
 			return ( trainWatcher->GetTrainDistanceAlongTrack() > sentryDistanceAlongPath + behindTrainTolerance );
 		}
 	}
@@ -402,6 +433,13 @@ ActionResult< CTFBot >	CTFBotEngineerBuilding::Update( CTFBot *me, float interva
 	// I have a Sentry
 	m_hasBuiltSentry = true;
 
+	if ( m_trackedSentry.Get() != mySentry )
+	{
+		// keep track of how long this sentry has been up
+		m_trackedSentry = mySentry;
+		m_sentryAgeTimer.Start();
+	}
+
 	if ( m_sentryBuildHint != NULL && !m_sentryBuildHint->IsEnabled() )
 	{
 		// our hint has been disabled and no longer has influence on our behavior
@@ -421,7 +459,7 @@ ActionResult< CTFBot >	CTFBotEngineerBuilding::Update( CTFBot *me, float interva
 		if ( m_isSentryOutOfPosition )
 		{
 			// the point has moved, only keep sentry as long as it keeps attacking
-			if ( mySentry->GetTimeSinceLastFired() > 10.0f )
+			if ( mySentry->GetTimeSinceLastFired() > 10.0f && m_sentryAgeTimer.IsGreaterThen( MinSentryAgeToMoveUp ) )
 			{
 				mySentry->DetonateObject();
 
@@ -514,7 +552,7 @@ ActionResult< CTFBot >	CTFBotEngineerBuilding::Update( CTFBot *me, float interva
 		// don't rebuild immediately after building is destroyed
 		m_teleportExitRetryTimer.Start( exitRebuildInterval );
 	}
-	else if ( m_teleportExitRetryTimer.IsElapsed() && myTeleportEntrance && !isUnderAttack )
+	else if ( m_teleportExitRetryTimer.IsElapsed() && myTeleportEntrance && !isUnderAttack && !IsTooCloseForTeleportExit( me, myTeleportEntrance ) )
 	{
 		m_teleportExitRetryTimer.Start( exitRebuildInterval );
 

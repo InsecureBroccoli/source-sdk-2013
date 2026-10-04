@@ -1471,7 +1471,7 @@ void CTeamTrainWatcher::ProjectPointOntoPath( const Vector &pos, Vector *posOnPa
 	float distanceAlong = 0.0f;
 
 	Vector closestPointOnPath = vec3_origin;
-	float closestPerpendicularDistanceSq = FLT_MAX;
+	float closestDistanceSq = FLT_MAX;
 	float closestDistanceAlongPath = FLT_MAX;
 
 	CPathTrack::BeginIteration();
@@ -1487,20 +1487,19 @@ void CTeamTrainWatcher::ProjectPointOntoPath( const Vector &pos, Vector *posOnPa
 		float segmentLength = alongPath.NormalizeInPlace();
 
 		toPos = pos - node->GetAbsOrigin();
-		float segmentOverlap = DotProduct( toPos, alongPath );
 
-		if ( segmentOverlap >= 0.0f && segmentOverlap < segmentLength )
+		// clamp to the segment, so positions past its ends (before the start of the track, or around the
+		// outside of a corner) use the nearest end instead of not projecting onto the path at all
+		float segmentOverlap = clamp( DotProduct( toPos, alongPath ), 0.0f, segmentLength );
+
+		Vector onPath = node->GetAbsOrigin() + alongPath * segmentOverlap;
+
+		float distanceSq = ( onPath - pos ).LengthSqr();
+		if ( distanceSq < closestDistanceSq )
 		{
-			// projection is within segment bounds
-			Vector onPath = node->GetAbsOrigin() + alongPath * segmentOverlap;
-
-			float perpendicularDistanceSq = ( onPath - pos ).LengthSqr();
-			if ( perpendicularDistanceSq < closestPerpendicularDistanceSq )
-			{
-				closestPointOnPath = onPath;
-				closestPerpendicularDistanceSq = perpendicularDistanceSq;
-				closestDistanceAlongPath = distanceAlong + segmentOverlap;
-			}
+			closestPointOnPath = onPath;
+			closestDistanceSq = distanceSq;
+			closestDistanceAlongPath = distanceAlong + segmentOverlap;
 		}
 
 		distanceAlong += segmentLength;

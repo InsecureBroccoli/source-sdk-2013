@@ -28,6 +28,9 @@ extern ConVar tf_bot_path_lookahead_range;
 ConVar tf_bot_debug_sentry_placement( "tf_bot_debug_sentry_placement", "0", FCVAR_CHEAT );
 ConVar tf_bot_max_teleport_exit_travel_to_point( "tf_bot_max_teleport_exit_travel_to_point", "2500", FCVAR_CHEAT, "In an offensive engineer bot's tele exit is farther from the point than this, destroy it" );
 ConVar tf_bot_min_teleport_travel( "tf_bot_min_teleport_travel", "3000", FCVAR_CHEAT, "Minimum travel distance between teleporter entrance and exit before engineer bot will build one" );
+ConVar tf_bot_engineer_build_behind_cart_min( "tf_bot_engineer_build_behind_cart_min", "300", FCVAR_CHEAT, "On payload, engineer bots pushing the cart build at least this far behind it, along the track" );
+ConVar tf_bot_engineer_build_behind_cart_max( "tf_bot_engineer_build_behind_cart_max", "700", FCVAR_CHEAT, "On payload, engineer bots pushing the cart build at most this far behind it, along the track" );
+ConVar tf_bot_engineer_move_up_behind_cart( "tf_bot_engineer_move_up_behind_cart", "1000", FCVAR_CHEAT, "On payload, engineer bots pushing the cart move their nest up once it's this far behind the cart (always at least 100 more than tf_bot_engineer_build_behind_cart_max)" );
 
 //--------------------------------------------------------------------------------------------------------
 static Vector s_pointCentroid;
@@ -45,6 +48,103 @@ int CompareRangeToPoint( CTFNavArea * const *area1, CTFNavArea * const *area2 )
 		return -1;
 
 	return 0;
+}
+
+
+//---------------------------------------------------------------------------------------------
+// Collect areas a little behind the cart we're pushing and near the track, so our teammates pushing it
+// are between our nest and the enemy while we build. Return false if there aren't any.
+bool CTFBotEngineerMoveToBuild::CollectBuildAreasBehindCart( CTFBot *me, CTeamTrainWatcher *trainWatcher )
+{
+	CBaseEntity *cart = trainWatcher->GetTrainEntity();
+	if ( !cart )
+		return false;
+
+	// the cart's origin can be inside the cart, which fails line of sight and ground checks
+	CNavArea *cartArea = TheTFNavMesh()->GetNearestNavArea( cart->GetAbsOrigin(), false, 500.0f, false, false );
+	if ( !cartArea )
+		return false;
+
+	const float maxTrackDistance = 750.0f;		// stay near the track, so our teammates pushing the cart can use our nest
+	const float trackClearance = 100.0f;		// but off of it, out of the way of the cart and our teammates
+	const float sentryEyeHeight = 60.0f;
+
+	float cartDistance = trainWatcher->GetTrainDistanceAlongTrack();
+	float minBehind = tf_bot_engineer_build_behind_cart_min.GetFloat();
+	float maxBehind = tf_bot_engineer_build_behind_cart_max.GetFloat();
+
+	CUtlVector< CNavArea * > nearbyAreaVector;
+	CollectSurroundingAreas( &nearbyAreaVector, cartArea, maxBehind + maxTrackDistance );
+
+	for( int pass=0; pass<2 && m_sentryAreaVector.Count() == 0; ++pass )
+	{
+		// if nothing fits (ie: the cart is at the start of the track), accept spots on the track or without
+		// a view of it, as close as right beside the cart - but never ahead of it
+		bool isRelaxed = ( pass > 0 );
+		float minBehindThisPass = isRelaxed ? 0.0f : minBehind;
+
+		for( int i=0; i<nearbyAreaVector.Count(); ++i )
+		{
+			CTFNavArea *area = (CTFNavArea *)nearbyAreaVector[i];
+
+			// nothing can be built in a spawn room
+			if ( area->HasAttributeTF( TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE ) )
+				continue;
+
+			Vector onTrack;
+			float alongTrack;
+			trainWatcher->ProjectPointOntoPath( area->GetCenter(), &onTrack, &alongTrack );
+
+			float behindCart = cartDistance - alongTrack;
+			if ( behindCart < minBehindThisPass || behindCart > maxBehind )
+				continue;
+
+			float trackDistance = ( area->GetCenter() - onTrack ).AsVector2D().Length();
+			if ( trackDistance > maxTrackDistance )
+				continue;
+
+			if ( !isRelaxed )
+			{
+				if ( trackDistance < trackClearance )
+					continue;
+
+				// our sentry should cover the track beside our nest
+				if ( !me->IsLineOfFireClear( area->GetCenter() + Vector( 0, 0, sentryEyeHeight ), onTrack + Vector( 0, 0, sentryEyeHeight ) ) )
+					continue;
+			}
+
+			m_sentryAreaVector.AddToTail( area );
+		}
+	}
+
+	return m_sentryAreaVector.Count() > 0;
+}
+
+
+//---------------------------------------------------------------------------------------------
+// On payload, how far behind the cart we're pushing our nest can get before we move it up
+float CTFBotEngineerMoveToBuild::GetMoveUpDistanceBehindCart( void )
+{
+	// never so close to our build range that we'd move up from a spot we just picked
+	return MAX( tf_bot_engineer_move_up_behind_cart.GetFloat(), tf_bot_engineer_build_behind_cart_max.GetFloat() + 100.0f );
+}
+
+
+//---------------------------------------------------------------------------------------------
+void CTFBotEngineerMoveToBuild::ComputeTotalSurfaceArea( void )
+{
+	m_totalSurfaceArea = 0.0f;
+	FOR_EACH_VEC( m_sentryAreaVector, it )
+	{
+		CTFNavArea *area = m_sentryAreaVector[ it ];
+
+		m_totalSurfaceArea += area->GetSizeX() * area->GetSizeY();
+
+		if ( tf_bot_debug_sentry_placement.GetBool() )
+		{
+			TheNavMesh->AddToSelectedSet( area );
+		}
+	}
 }
 
 
@@ -84,6 +184,23 @@ void CTFBotEngineerMoveToBuild::CollectBuildAreas( CTFBot *me )
 		if ( myTeam == TF_TEAM_BLUE )
 		{
 			trainWatcher = TFGameRules()->GetPayloadToPush( me->GetTeamNumber() );
+
+			// set up near the cart instead of at the next checkpoint, which is in the middle of the enemy's defense
+			if ( trainWatcher && CollectBuildAreasBehindCart( me, trainWatcher ) )
+			{
+				if ( tf_bot_debug_sentry_placement.GetBool() )
+				{
+					Msg( "%s: %d places to build behind the cart\n", me->GetPlayerName(), m_sentryAreaVector.Count() );
+				}
+
+				ComputeTotalSurfaceArea();
+				return;
+			}
+
+			if ( tf_bot_debug_sentry_placement.GetBool() )
+			{
+				Msg( "%s: No place to build behind the cart - building near the next checkpoint instead\n", me->GetPlayerName() );
+			}
 		}
 		else
 		{
@@ -201,19 +318,7 @@ void CTFBotEngineerMoveToBuild::CollectBuildAreas( CTFBot *me )
 		m_sentryAreaVector.AddToTail( usableArea );
 	}
 
-	// calculate total surface area
-	m_totalSurfaceArea = 0.0f;
-	FOR_EACH_VEC( m_sentryAreaVector, it )
-	{
-		CTFNavArea *area = m_sentryAreaVector[ it ];
-
-		m_totalSurfaceArea += area->GetSizeX() * area->GetSizeY();
-
-		if ( tf_bot_debug_sentry_placement.GetBool() )
-		{
-			TheNavMesh->AddToSelectedSet( area );
-		}
-	}
+	ComputeTotalSurfaceArea();
 }
 
 
@@ -358,7 +463,8 @@ ActionResult< CTFBot >	CTFBotEngineerMoveToBuild::Update( CTFBot *me, float inte
 	}
 
 	// offensive engineers need to place a forward teleporter
-	if ( ( TFGameRules()->IsAttackDefenseMode() && me->GetTeamNumber() == TF_TEAM_BLUE ) ||
+	// (on payload our nest stays close to the cart, so we build our exit there instead)
+	if ( ( TFGameRules()->IsAttackDefenseMode() && me->GetTeamNumber() == TF_TEAM_BLUE && TFGameRules()->GetGameType() != TF_GAMETYPE_ESCORT ) ||
 		 ( TFGameRules()->GetGameType() == TF_GAMETYPE_CP && !TFGameRules()->IsAttackDefenseMode() && !TFGameRules()->IsInKothMode() ) )
 	{
 		CObjectTeleporter *myTeleportExit = (CObjectTeleporter *)me->GetObjectOfType( OBJ_TELEPORTER, MODE_TELEPORTER_EXIT );
@@ -424,6 +530,24 @@ ActionResult< CTFBot >	CTFBotEngineerMoveToBuild::Update( CTFBot *me, float inte
 						return SuspendFor( new CTFBotRetreatToCover( nextActionWhenInCover ), "Retreating to a safe place to build my teleporter exit" );
 					}
 				}
+			}
+		}
+	}
+
+	// the cart keeps moving while we walk to our build spot - if it has left the spot too far behind, pick a new one
+	if ( m_sentryBuildHint == NULL && m_buildLocationCheckTimer.IsElapsed() )
+	{
+		m_buildLocationCheckTimer.Start( 1.0f );
+
+		CTeamTrainWatcher *trainWatcher = TFGameRules()->GetPayloadToPush( me->GetTeamNumber() );
+		if ( trainWatcher )
+		{
+			float alongTrack;
+			trainWatcher->ProjectPointOntoPath( m_sentryBuildLocation, NULL, &alongTrack );
+
+			if ( trainWatcher->GetTrainDistanceAlongTrack() - alongTrack > GetMoveUpDistanceBehindCart() )
+			{
+				SelectBuildLocation( me );
 			}
 		}
 	}

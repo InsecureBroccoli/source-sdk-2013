@@ -112,6 +112,7 @@ public:
 	bool IsAnyPointBeingCaptured( void ) const;						// return true if any point is being captured
 	bool IsNearPoint( CTeamControlPoint *point ) const;				// return true if we are within a short travel distance of the current point
 	float GetTimeLeftToCapture( void ) const;						// return time left to capture the point before we lose the game
+	bool IsAheadOfPayloadToPush( const Vector &pos ) const;			// return true if the given position is farther down the track than the cart we're pushing
 
 	CCaptureFlag *GetFlagToFetch( void ) const;						// return flag we want to fetch
 	CCaptureZone *GetFlagCaptureZone( void ) const;					// return capture zone for our flag(s)

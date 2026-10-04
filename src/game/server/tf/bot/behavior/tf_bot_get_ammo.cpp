@@ -49,6 +49,10 @@ public:
 		if ( close.m_closePlayer && !m_me->InSameTeam( close.m_closePlayer ) )
 			return false;
 
+		// engineers set up behind the cart - don't wander past it into the enemy's defense
+		if ( m_me->IsPlayerClass( TF_CLASS_ENGINEER ) && m_me->IsAheadOfPayloadToPush( candidate->WorldSpaceCenter() ) )
+			return false;
+
 		// resupply cabinets (not assigned a team)
 		if ( candidate->ClassMatches( "func_regenerate" ) )
 		{
