@@ -18,9 +18,22 @@ extern ConVar tf_bot_path_lookahead_range;
 ConVar tf_bot_max_teleport_entrance_travel( "tf_bot_max_teleport_entrance_travel", "1500", FCVAR_CHEAT, "Don't plant teleport entrances farther than this travel distance from our spawn room" );
 ConVar tf_bot_teleport_build_surface_normal_limit( "tf_bot_teleport_build_surface_normal_limit", "0.99", FCVAR_CHEAT, "If the ground normal Z component is less that this value, Engineer bots won't place their entrance teleporter" );
 
+const float SearchTurnInterval = 0.5f;		// how long to try each direction - enough time for our head to turn and settle
+const int SearchTurnCount = 5;				// 60 degree turns, covering the rest of a full circle
+const float SearchCooldown = 1.0f;			// how long to keep walking after a search fails
+
 //---------------------------------------------------------------------------------------------
 ActionResult< CTFBot >	CTFBotEngineerBuildTeleportEntrance::OnStart( CTFBot *me, Action< CTFBot > *priorAction )
 {
+	// measure how far we've walked since spawning - the nav mesh's incursion distances only count
+	// one spawn room per team, which may not be the one we're in
+	m_lastPos = me->GetAbsOrigin();
+	m_travelDistance = 0.0f;
+
+	m_searchTimer.Invalidate();
+	m_searchCooldownTimer.Invalidate();
+	m_searchYaw = 0.0f;
+
 	return Continue();
 }
 
@@ -43,7 +56,10 @@ ActionResult< CTFBot >	CTFBotEngineerBuildTeleportEntrance::Update( CTFBot *me, 
 		return Done( "No nav mesh!" );
 	}
 
-	if ( myArea->GetIncursionDistance( me->GetTeamNumber() ) > tf_bot_max_teleport_entrance_travel.GetFloat() )
+	m_travelDistance += ( me->GetAbsOrigin() - m_lastPos ).Length();
+	m_lastPos = me->GetAbsOrigin();
+
+	if ( m_travelDistance > tf_bot_max_teleport_entrance_travel.GetFloat() )
 	{
 		return ChangeTo( new CTFBotEngineerMoveToBuild, "Too far from our spawn room to build teleporter entrance" );
 	}
@@ -75,7 +91,20 @@ ActionResult< CTFBot >	CTFBotEngineerBuildTeleportEntrance::Update( CTFBot *me, 
 		}
 	}
 
-	m_path.Update( me );
+	if ( m_searchTimer.HasStarted() && !m_searchTimer.IsElapsed() )
+	{
+		// stand still and turn in steps, looking for a place to build
+		int turn = 1 + (int)( m_searchTimer.GetElapsedTime() / SearchTurnInterval );
+
+		Vector searchForward;
+		AngleVectors( QAngle( 0.0f, m_searchYaw + turn * 360.0f / ( SearchTurnCount + 1 ), 0.0f ), &searchForward );
+
+		me->GetBodyInterface()->AimHeadTowards( me->EyePosition() + 100.0f * searchForward, IBody::CRITICAL, SearchTurnInterval, NULL, "Looking for a place to build my teleporter entrance" );
+	}
+	else
+	{
+		m_path.Update( me );
+	}
 
 	// build
 	CTFWeaponBase *myGun = me->GetActiveTFWeapon();
@@ -98,6 +127,13 @@ ActionResult< CTFBot >	CTFBotEngineerBuildTeleportEntrance::Update( CTFBot *me, 
 			{
 				// place it down
 				me->PressFireButton();
+			}
+			else if ( m_searchCooldownTimer.IsElapsed() && !myArea->HasAttributeTF( TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE ) )
+			{
+				// can't build straight ahead - stop and look around for a spot (nothing can be built in a spawn room)
+				m_searchYaw = me->EyeAngles().y;
+				m_searchTimer.Start( SearchTurnCount * SearchTurnInterval );
+				m_searchCooldownTimer.Start( SearchTurnCount * SearchTurnInterval + SearchCooldown );
 			}
 		}
 		else

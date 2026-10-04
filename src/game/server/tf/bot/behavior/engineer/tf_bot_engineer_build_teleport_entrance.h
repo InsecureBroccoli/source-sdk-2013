@@ -18,6 +18,13 @@ public:
 
 private:
 	PathFollower m_path;
+
+	Vector m_lastPos;
+	float m_travelDistance;					// how far we've walked since we spawned
+
+	CountdownTimer m_searchTimer;			// while running, we're standing still and turning to find a place to build
+	CountdownTimer m_searchCooldownTimer;
+	float m_searchYaw;
 };
 
 #endif // TF_BOT_ENGINEER_BUILD_TELEPORT_ENTRANCE_H
