@@ -899,6 +899,15 @@ inline const CTFBot *ToTFBot( const CBaseEntity *pEntity )
 }
 
 
+//---------------------------------------------------------------------------------------------
+// Return true if our attacks can neither hurt nor push the given entity right now (ie: robots leaving their spawn in MvM)
+inline bool IsUnaffectedByAttacks( CBaseEntity *pEntity )
+{
+	CTFPlayer *pPlayer = ToTFPlayer( pEntity );
+	return pPlayer && pPlayer->m_Shared.IsInvulnerable() && pPlayer->m_Shared.InCond( TF_COND_IMMUNE_TO_PUSHBACK );
+}
+
+
 //--------------------------------------------------------------------------------------------------------------
 /**
  * Functor used with NavAreaBuildPath()

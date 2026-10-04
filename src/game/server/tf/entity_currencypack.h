@@ -43,6 +43,7 @@ public:
 	void	SetClaimed( void ) { m_bClaimed = true; }	// Radius collection code "steers" packs toward the player
 	bool	IsClaimed( void ) { return m_bClaimed; }	// So don't allow other players to interfere
 	void	DistributedBy( CBasePlayer* pMoneyMaker );
+	bool	IsDistributed( void ) const { return m_bDistributed; }	// its money has already been given to the team (red money)
 	
 	virtual CurrencyRewards_t	GetPackSize( void ) { return TF_CURRENCY_PACK_LARGE; }
 	virtual const char *GetDefaultPowerupModel( void ) { return "models/items/currencypack_large.mdl"; }

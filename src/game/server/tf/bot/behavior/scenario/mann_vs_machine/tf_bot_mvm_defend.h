@@ -45,6 +45,8 @@ private:
 	CTFNavArea *m_defenseArea;
 	Vector m_defenseSpot;
 	CountdownTimer m_defenseAreaTimer;
+
+	CountdownTimer m_moneySearchTimer;
 };
 
 

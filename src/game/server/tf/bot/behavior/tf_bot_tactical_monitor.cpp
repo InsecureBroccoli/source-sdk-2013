@@ -99,6 +99,12 @@ void CTFBotTacticalMonitor::MonitorArmedStickyBombs( CTFBot *me )
 							continue;
 						}
 
+						if ( IsUnaffectedByAttacks( knownVector[k].GetEntity() ) )
+						{
+							// our trap wouldn't do anything to them yet (ie: robots leaving their spawn)
+							continue;
+						}
+
 						const float closeRange = 150.0f;
 						if ( ( knownVector[k].GetLastKnownPosition() - sticky->GetAbsOrigin() ).IsLengthLessThan( closeRange ) )
 						{

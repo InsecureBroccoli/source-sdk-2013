@@ -1309,16 +1309,18 @@ void CTFBotMainAction::FireWeaponAtEnemy( CTFBot *me )
 	}
 
 	// if our target is uber'd, most weapons are useless - unless we're a robot in MvM, where invuln tanking is valuable
-	// (robots leaving their spawn are uber'd, so don't waste our ammo on them)
 	if ( TFGameRules() && !( TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_INVADERS ) )
 	{
 		CTFPlayer *playerThreat = ToTFPlayer( threat->GetEntity() );
 		if ( playerThreat && playerThreat->m_Shared.IsInvulnerable() )
 		{
-			if ( !myWeapon->IsWeapon( TF_WEAPON_ROCKETLAUNCHER ) &&
-				!myWeapon->IsWeapon( TF_WEAPON_GRENADELAUNCHER ) &&
-				!myWeapon->IsWeapon( TF_WEAPON_PIPEBOMBLAUNCHER ) &
-				!myWeapon->IsWeapon( TF_WEAPON_ROCKETLAUNCHER_DIRECTHIT ) )
+			// explosives can still knock them around - unless they can't be pushed either (ie: robots leaving their spawn)
+			bool isExplosive = myWeapon->IsWeapon( TF_WEAPON_ROCKETLAUNCHER ) ||
+							   myWeapon->IsWeapon( TF_WEAPON_GRENADELAUNCHER ) ||
+							   myWeapon->IsWeapon( TF_WEAPON_PIPEBOMBLAUNCHER ) ||
+							   myWeapon->IsWeapon( TF_WEAPON_ROCKETLAUNCHER_DIRECTHIT );
+
+			if ( !isExplosive || IsUnaffectedByAttacks( playerThreat ) )
 			{
 				// firing would just waste ammo, so don't
 				return;

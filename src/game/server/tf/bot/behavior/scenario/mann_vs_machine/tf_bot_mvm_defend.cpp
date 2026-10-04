@@ -8,6 +8,7 @@
 #include "tf_gamerules.h"
 #include "bot/tf_bot.h"
 #include "bot/behavior/scenario/mann_vs_machine/tf_bot_mvm_defend.h"
+#include "bot/behavior/scenario/mann_vs_machine/tf_bot_mvm_collect_money.h"
 #include "bot/behavior/demoman/tf_bot_prepare_stickybomb_trap.h"
 
 
@@ -243,6 +244,7 @@ ActionResult< CTFBot >	CTFBotMvMDefend::OnStart( CTFBot *me, Action< CTFBot > *p
 	m_defenseArea = NULL;
 	m_defenseAreaTimer.Invalidate();
 	m_repathTimer.Invalidate();
+	m_moneySearchTimer.Invalidate();
 
 	return Continue();
 }
@@ -256,6 +258,18 @@ ActionResult< CTFBot >	CTFBotMvMDefend::Update( CTFBot *me, float interval )
 	{
 		// prepare to fight
 		me->EquipBestWeaponForThreat( threat );
+	}
+
+	// Scouts collect the money the robots drop - it heals them, too
+	if ( me->IsPlayerClass( TF_CLASS_SCOUT ) && m_moneySearchTimer.IsElapsed() )
+	{
+		m_moneySearchTimer.Start( 0.5f );
+
+		CCurrencyPack *money = CTFBotMvMCollectMoney::FindMoneyToCollect( me );
+		if ( money )
+		{
+			return SuspendFor( new CTFBotMvMCollectMoney( money ), "Collecting money" );
+		}
 	}
 
 	// the robots keep pushing toward the hatch, so keep our stand between them and it
@@ -354,6 +368,16 @@ static bool IsVisibleBombCarrier( const CKnownEntity *threat )
 // Return the more dangerous of the two threats to 'subject', or NULL if we have no opinion
 const CKnownEntity *CTFBotMvMDefend::SelectMoreDangerousThreat( const INextBot *me, const CBaseCombatCharacter *subject, const CKnownEntity *threat1, const CKnownEntity *threat2 ) const
 {
+	// don't waste time on robots we can't do anything to yet (ie: ones leaving their spawn)
+	bool isUnaffected1 = IsUnaffectedByAttacks( threat1->GetEntity() );
+	bool isUnaffected2 = IsUnaffectedByAttacks( threat2->GetEntity() );
+
+	if ( isUnaffected1 && !isUnaffected2 )
+		return threat2;
+
+	if ( isUnaffected2 && !isUnaffected1 )
+		return threat1;
+
 	// stopping the bomb comes first
 	bool isCarrier1 = IsVisibleBombCarrier( threat1 );
 	bool isCarrier2 = IsVisibleBombCarrier( threat2 );
