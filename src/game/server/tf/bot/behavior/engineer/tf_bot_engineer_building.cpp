@@ -58,8 +58,64 @@ ActionResult< CTFBot >	CTFBotEngineerBuilding::OnStart( CTFBot *me, Action< CTFB
 	m_hasBuiltSentry = false;
 	m_isSentryOutOfPosition = false;
 	m_nearbyMetalStatus = NEARBY_METAL_UNKNOWN;
+	m_isWorkingOnTeleporter = false;
 
 	return Continue();
+}
+
+
+//---------------------------------------------------------------------------------------------
+// Return the building that most needs our attention
+CBaseObject *CTFBotEngineerBuilding::SelectBuildingToWorkOn( CTFBot *me, CObjectSentrygun *mySentry, CObjectDispenser *myDispenser, CObjectTeleporter *myTeleportExit ) const
+{
+	if ( mySentry->HasSapper() || mySentry->IsPlasmaDisabled() )
+		return mySentry;
+
+	if ( myDispenser && ( myDispenser->HasSapper() || myDispenser->IsPlasmaDisabled() ) )
+		return myDispenser;
+
+	if ( mySentry->GetTimeSinceLastInjury() < 1.0f || mySentry->GetHealth() < mySentry->GetMaxHealth() )
+		return mySentry;
+
+	if ( myTeleportExit && ( myTeleportExit->HasSapper() || myTeleportExit->IsPlasmaDisabled() ) )
+		return myTeleportExit;
+
+	if ( mySentry->IsBuilding() )
+		return mySentry;
+
+	if ( myDispenser && myDispenser->IsBuilding() )
+		return myDispenser;
+
+	if ( mySentry->GetUpgradeLevel() < 3 )
+		return mySentry;
+
+	if ( myDispenser && myDispenser->GetHealth() < myDispenser->GetMaxHealth() )
+		return myDispenser;
+
+	if ( myDispenser && myDispenser->GetUpgradeLevel() < mySentry->GetUpgradeLevel() )
+		return myDispenser;
+
+	if ( myTeleportExit )
+	{
+		if ( myTeleportExit->IsBuilding() )
+			return myTeleportExit;
+
+		// repairs and upgrades cost metal, and our Teleporter Exit is usually away from our Dispenser,
+		// so only head over with a full load, then keep at it until it is spent
+		int metal = me->GetAmmoCount( TF_AMMO_METAL );
+		bool hasMetalToSpend = m_isWorkingOnTeleporter ? ( metal > 0 ) : ( metal >= me->GetMaxAmmo( TF_AMMO_METAL ) );
+
+		if ( hasMetalToSpend )
+		{
+			if ( myTeleportExit->GetHealth() < myTeleportExit->GetMaxHealth() )
+				return myTeleportExit;
+
+			if ( myTeleportExit->GetUpgradeLevel() < mySentry->GetUpgradeLevel() )
+				return myTeleportExit;
+		}
+	}
+
+	return mySentry;
 }
 
 
@@ -70,6 +126,7 @@ void CTFBotEngineerBuilding::UpgradeAndMaintainBuildings( CTFBot *me )
 {
 	CObjectSentrygun *mySentry = (CObjectSentrygun *)me->GetObjectOfType( OBJ_SENTRYGUN );
 	CObjectDispenser *myDispenser = (CObjectDispenser *)me->GetObjectOfType( OBJ_DISPENSER );
+	CObjectTeleporter *myTeleportExit = (CObjectTeleporter *)me->GetObjectOfType( OBJ_TELEPORTER, MODE_TELEPORTER_EXIT );
 
 	if ( !mySentry )
 	{
@@ -83,6 +140,53 @@ void CTFBotEngineerBuilding::UpgradeAndMaintainBuildings( CTFBot *me )
 	}
 
 	const float tooFarRange = 75.0f;
+
+	CBaseObject *workTarget = SelectBuildingToWorkOn( me, mySentry, myDispenser, myTeleportExit );
+
+	bool isWorkingOnTeleporter = ( myTeleportExit && workTarget == myTeleportExit );
+	if ( isWorkingOnTeleporter != m_isWorkingOnTeleporter )
+	{
+		// we're heading somewhere else - don't follow our old path
+		m_isWorkingOnTeleporter = isWorkingOnTeleporter;
+		m_path.Invalidate();
+		m_repathTimer.Invalidate();
+	}
+
+	if ( m_isWorkingOnTeleporter )
+	{
+		// our Teleporter Exit is usually away from our other buildings - go to it
+		float rangeToTeleporter = me->GetDistanceBetween( myTeleportExit );
+
+		if ( rangeToTeleporter < 1.2f * tooFarRange )
+		{
+			// crouch so our wrench can reach the low Teleporter, and to slow us down so we hit our move goal more accurately
+			me->PressCrouchButton();
+		}
+
+		if ( m_repathTimer.IsElapsed() )
+		{
+			m_repathTimer.Start( RandomFloat( 1.0f, 2.0f ) );
+
+			// Teleporters are solid - stand beside it
+			Vector toTeleporter = myTeleportExit->GetAbsOrigin() - me->GetAbsOrigin();
+			Vector hittingTeleporterSpot = myTeleportExit->GetAbsOrigin() - 50.0f * toTeleporter.Normalized();
+
+			CTFBotPathCost cost( me, FASTEST_ROUTE );
+			m_path.Compute( me, hittingTeleporterSpot, cost );
+		}
+
+		m_path.Update( me );
+
+		if ( rangeToTeleporter < tooFarRange )
+		{
+			// we are in position - work on our Teleporter
+			me->StopLookingAroundForEnemies();
+			me->GetBodyInterface()->AimHeadTowards( myTeleportExit->WorldSpaceCenter(), IBody::CRITICAL, 1.0f, NULL, "Work on my Teleporter" );
+			me->PressFireButton();
+		}
+
+		return;
+	}
 
 	if ( !myDispenser )
 	{
@@ -150,25 +254,6 @@ void CTFBotEngineerBuilding::UpgradeAndMaintainBuildings( CTFBot *me )
 	{
 		// we are (nearly) in position - work on our buildings
 		m_searchTimer.Invalidate();
-
-		CBaseObject *workTarget = mySentry;
-
-		if ( mySentry->HasSapper() || mySentry->IsPlasmaDisabled() )
-			workTarget = mySentry;
-		else if ( myDispenser->HasSapper() || myDispenser->IsPlasmaDisabled() )
-			workTarget = myDispenser;
-		else if ( mySentry->GetTimeSinceLastInjury() < 1.0f || mySentry->GetHealth() < mySentry->GetMaxHealth() )
-			workTarget = mySentry;
-		else if ( mySentry->IsBuilding() )
-			workTarget = mySentry;
-		else if ( myDispenser->IsBuilding() )
-			workTarget = myDispenser;
-		else if ( mySentry->GetUpgradeLevel() < 3 )
-			workTarget = mySentry;
-		else if ( myDispenser->GetHealth() < myDispenser->GetMaxHealth() )
-			workTarget = myDispenser;
-		else if ( myDispenser->GetUpgradeLevel() < mySentry->GetUpgradeLevel() )
-			workTarget = myDispenser;
 
 		me->StopLookingAroundForEnemies();
 		me->GetBodyInterface()->AimHeadTowards( workTarget->WorldSpaceCenter(), IBody::CRITICAL, 1.0f, NULL, "Work on my buildings" );
@@ -280,6 +365,7 @@ ActionResult< CTFBot >	CTFBotEngineerBuilding::Update( CTFBot *me, float interva
 	bool isUnderAttack = ( me->GetTimeSinceLastInjury() < 1.0f );
 	isUnderAttack |= ( mySentry && ( mySentry->HasSapper() || mySentry->IsPlasmaDisabled() ) );
 	isUnderAttack |= ( myDispenser && ( myDispenser->HasSapper() || myDispenser->IsPlasmaDisabled() ) );
+	isUnderAttack |= ( myTeleportExit && ( myTeleportExit->HasSapper() || myTeleportExit->IsPlasmaDisabled() ) );
 
 	me->StartLookingAroundForEnemies();
 

@@ -7,6 +7,10 @@
 #define TF_BOT_ENGINEER_BUILDING_H
 
 class CTFBotHintSentrygun;
+class CBaseObject;
+class CObjectSentrygun;
+class CObjectDispenser;
+class CObjectTeleporter;
 
 
 class CTFBotEngineerBuilding : public Action< CTFBot >
@@ -56,7 +60,10 @@ private:
 	bool m_isSentryOutOfPosition;
 	bool CheckIfSentryIsOutOfPosition( CTFBot *me ) const;
 
+	bool m_isWorkingOnTeleporter;
+
 	void UpgradeAndMaintainBuildings( CTFBot *me );
+	CBaseObject *SelectBuildingToWorkOn( CTFBot *me, CObjectSentrygun *mySentry, CObjectDispenser *myDispenser, CObjectTeleporter *myTeleportExit ) const;
 	bool IsMetalSourceNearby( CTFBot *me ) const;
 };
 

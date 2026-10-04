@@ -964,8 +964,9 @@ void CTFPlayerInventory::LoadLocalLoadout()
 					m_LoadoutItems[iClass][iSlot] = uItemId;
 
 					CEconItemView *pItem = GetInventoryItemByItemID(uItemId);
-					if (pItem) {
-						pItem->GetSOCData()->Equip(iClass, iSlot);
+					CEconItem *pSOCData = pItem ? pItem->GetSOCData() : NULL;
+					if (pSOCData) {
+						pSOCData->Equip(iClass, iSlot);
 					}
 				}
 			}
@@ -1050,16 +1051,18 @@ void CTFPlayerInventory::EquipLocal(uint64 ulItemID, equipped_class_t unClass, e
 	{
 		itemid_t ulPreviousItem = m_LoadoutItems[unClass][unSlot];
 		CEconItemView *pPreviousItem = GetInventoryItemByItemID(ulPreviousItem);
-		if (pPreviousItem) {
-			pPreviousItem->GetSOCData()->UnequipFromClass(unClass);
+		CEconItem *pPreviousSOCData = pPreviousItem ? pPreviousItem->GetSOCData() : NULL;
+		if (pPreviousSOCData) {
+			pPreviousSOCData->UnequipFromClass(unClass);
 		}
 	}
 
 	// Equip the new item and add it to our loadout.
 	CEconItemView *pItem = GetInventoryItemByItemID(ulItemID);
-	if ( pItem )
+	CEconItem *pSOCData = pItem ? pItem->GetSOCData() : NULL;
+	if ( pSOCData )
 	{
-		pItem->GetSOCData()->Equip(unClass, unSlot);
+		pSOCData->Equip(unClass, unSlot);
 	}
 
 	m_LoadoutItems[unClass][unSlot] = ulItemID;

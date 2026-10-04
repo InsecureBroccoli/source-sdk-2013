@@ -1462,6 +1462,14 @@ void AddToMapVec( MapType& mapVec, const CEconItemView* pItem, KeyType key )
 //-----------------------------------------------------------------------------
 bool CPlayerInventory::AddEconItem( CEconItem * pItem, bool bUpdateAckFile, bool bWriteAckFile, bool bCheckForNewItems )
 {
+	// Real items always have an ID. An empty item (e.g. parsed from a zero-length object in the
+	// inventory sent to mods) has no ID or owner, and would match every empty loadout slot (ID 0).
+	if ( pItem->GetItemID() == 0 )
+	{
+		Warning( "Ignoring inventory item with no item ID (item def %d)\n", (int)pItem->GetDefinitionIndex() );
+		return false;
+	}
+
 	CEconItemView newItem;
 	if( !FilloutItemFromEconItem( &newItem, pItem ) )
 	{
