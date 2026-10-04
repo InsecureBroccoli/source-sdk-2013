@@ -21461,6 +21461,15 @@ int CTFGameRules::GetTeamAssignmentOverride( CTFPlayer *pTFPlayer, int iDesiredT
 				iTeam = TEAM_SPECTATOR;
 			}
 		}
+		else if ( pTFPlayer->IsBot() && iTeam == TF_TEAM_PVE_DEFENDERS )
+		{
+			// bots defending alongside players get the same money as a player joining now
+			int nRoundCurrency = MannVsMachineStats_GetAcquiredCredits();
+			nRoundCurrency += g_pPopulationManager->GetStartingCurrency();
+
+			int spentCurrency = g_pPopulationManager->GetPlayerCurrencySpent( pTFPlayer );
+			pTFPlayer->SetCurrency( nRoundCurrency - spentCurrency );
+		}
 	}
 	else if ( pMatch )
 	{

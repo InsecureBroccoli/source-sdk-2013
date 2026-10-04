@@ -2272,7 +2272,13 @@ CPopulationManager::CheckpointSnapshotInfo *CPopulationManager::FindCheckpointSn
 CPopulationManager::PlayerUpgradeHistory *CPopulationManager::FindOrAddPlayerUpgradeHistory ( CTFPlayer *player )
 {
 	CSteamID steamId;
-	if (!player->GetSteamID( &steamId ))
+	if ( player->IsBot() )
+	{
+		// bots defending alongside players don't have a SteamID - make one up from their user ID, which
+		// is unique while they're connected, and can't match a real player's SteamID
+		steamId = CSteamID( player->GetUserID(), k_EUniverseInvalid, k_EAccountTypeInvalid );
+	}
+	else if (!player->GetSteamID( &steamId ))
 	{
 		Log( "MvM : Unable to Find SteamID for player %s, unable to locate their upgrade history!", player->GetPlayerName() );
 		return NULL;

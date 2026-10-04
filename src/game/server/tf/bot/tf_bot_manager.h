@@ -116,6 +116,9 @@ protected:
 	CountdownTimer m_mvmReadyCheckTimer;
 	IntervalTimer m_mvmSetupTimer;					// how long bots have been defending by themselves, between waves
 
+	void UpdateMvMDefenderUpgrades( void );			// bots defending in MvM spend their money on upgrades
+	CountdownTimer m_mvmUpgradeTimer;
+
 #ifdef TF_CREEP_MODE
 	void UpdateCreepWaves();
 	CountdownTimer m_creepWaveTimer;

@@ -4493,10 +4493,21 @@ bool CTFPlayer::ItemIsAllowed( CEconItemView *pItem )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose: Bots don't keep upgrades, except ones defending against the robots in MvM
+//-----------------------------------------------------------------------------
+static bool ShouldTrackUpgrades( const CTFPlayer *pPlayer )
+{
+	if ( !pPlayer->IsBot() )
+		return true;
+
+	return TFGameRules() && TFGameRules()->IsMannVsMachineMode() && pPlayer->GetTeamNumber() == TF_TEAM_PVE_DEFENDERS;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:
 //-----------------------------------------------------------------------------
 void CTFPlayer::ManageRegularWeapons( TFPlayerClassData_t *pData )
-{	
+{
 	// Reset ammo.
 	RemoveAllAmmo();
 
@@ -4799,7 +4810,7 @@ void CTFPlayer::ManageRegularWeapons( TFPlayerClassData_t *pData )
 		}
 	}
 
-	if ( TFGameRules() && TFGameRules()->GameModeUsesUpgrades() && !IsBot() ) 
+	if ( TFGameRules() && TFGameRules()->GameModeUsesUpgrades() && ShouldTrackUpgrades( this ) )
 	{
 		if (  m_Inventory.ClassLoadoutHasChanged( GetPlayerClass()->GetClassIndex() ) 
 		   || ( m_bSwitchedClass )
@@ -22163,7 +22174,7 @@ void CTFPlayer::GrantOrRemoveAllUpgrades( bool bRemove, bool bRefund )
 //-----------------------------------------------------------------------------
 void CTFPlayer::RememberUpgrade( int iPlayerClass, CEconItemView *pItem, int iUpgrade, int nCost, bool bDowngrade )
 {
-	if ( IsBot() )
+	if ( !ShouldTrackUpgrades( this ) )
 		return;
 
 	if ( TFGameRules() == NULL || !TFGameRules()->GameModeUsesUpgrades() )
@@ -22231,7 +22242,7 @@ void CTFPlayer::RememberUpgrade( int iPlayerClass, CEconItemView *pItem, int iUp
 //-----------------------------------------------------------------------------
 void CTFPlayer::ForgetFirstUpgradeForItem( CEconItemView *pItem )
 {
-	if ( IsBot() )
+	if ( !ShouldTrackUpgrades( this ) )
 		return;
 
 	if ( TFGameRules() && !TFGameRules()->GameModeUsesUpgrades() )
@@ -22282,7 +22293,7 @@ void CTFPlayer::ClearUpgradeHistory( void )
 //-----------------------------------------------------------------------------
 void CTFPlayer::ReapplyItemUpgrades( CEconItemView *pItem )
 {
-	if ( IsBot() )
+	if ( !ShouldTrackUpgrades( this ) )
 		return;
 
 	int iClassIndex = GetPlayerClass()->GetClassIndex();
@@ -22312,7 +22323,7 @@ void CTFPlayer::ReapplyItemUpgrades( CEconItemView *pItem )
 //-----------------------------------------------------------------------------
 void CTFPlayer::ReapplyPlayerUpgrades( void )
 {
-	if ( IsBot() )
+	if ( !ShouldTrackUpgrades( this ) )
 		return;
 
 	int iClassIndex = GetPlayerClass()->GetClassIndex();

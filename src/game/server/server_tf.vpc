@@ -605,6 +605,8 @@ $Project "Server (TF)"
 							$File	"tf\bot\behavior\scenario\mann_vs_machine\tf_bot_mvm_defend.h"
 							$File	"tf\bot\behavior\scenario\mann_vs_machine\tf_bot_mvm_collect_money.cpp"
 							$File	"tf\bot\behavior\scenario\mann_vs_machine\tf_bot_mvm_collect_money.h"
+							$File	"tf\bot\behavior\scenario\mann_vs_machine\tf_bot_mvm_upgrades.cpp"
+							$File	"tf\bot\behavior\scenario\mann_vs_machine\tf_bot_mvm_upgrades.h"
 						}
 					}
 					

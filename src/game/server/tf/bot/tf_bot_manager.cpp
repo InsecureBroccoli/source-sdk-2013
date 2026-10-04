@@ -13,6 +13,8 @@
 #include "tf_bot.h"
 #include "tf_gamerules.h"
 #include "tf_obj.h"
+#include "tf_objective_resource.h"
+#include "bot/behavior/scenario/mann_vs_machine/tf_bot_mvm_upgrades.h"
 #include "bot/map_entities/tf_bot_hint.h"
 #include "bot/map_entities/tf_bot_hint_sentrygun.h"
 #include "bot/map_entities/tf_bot_hint_teleporter_exit.h"
@@ -32,6 +34,7 @@ ConVar tf_bot_offline_practice( "tf_bot_offline_practice", "0", FCVAR_NONE, "Tel
 ConVar tf_bot_melee_only( "tf_bot_melee_only", "0", FCVAR_GAMEDLL, "If nonzero, TFBots will only use melee weapons" );
 ConVar tf_bot_mvm_auto_ready_delay( "tf_bot_mvm_auto_ready_delay", "20", FCVAR_CHEAT, "In MvM, if no players are defending, the defending bots ready up for the next wave once they've had at least this many seconds to set up, and their engineers' sentries are built" );
 ConVar tf_bot_mvm_auto_ready_max_delay( "tf_bot_mvm_auto_ready_max_delay", "90", FCVAR_CHEAT, "In MvM, if no players are defending, the defending bots ready up for the next wave after this many seconds, even if their engineers' sentries aren't built" );
+ConVar tf_bot_mvm_buy_upgrades( "tf_bot_mvm_buy_upgrades", "1", FCVAR_CHEAT, "In MvM, if nonzero, the defending bots spend their money on upgrades" );
 
 extern const char *GetRandomBotName( void );
 extern void CreateBotName( int iTeam, int iClassIndex, CTFBot::DifficultyType skill, char* pBuffer, int iBufferSize );
@@ -157,6 +160,7 @@ void CTFBotManager::Update()
 	MaintainBotQuota();
 
 	UpdateMvMDefenderReadyState();
+	UpdateMvMDefenderUpgrades();
 
 	DrawStuckBotData();
 
@@ -636,6 +640,49 @@ void CTFBotManager::UpdateMvMDefenderReadyState( void )
 	FOR_EACH_VEC( botVector, i )
 	{
 		TFGameRules()->PlayerReadyStatus_UpdatePlayerState( botVector[i], shouldBeReady );
+	}
+}
+
+
+//----------------------------------------------------------------------------------------------------------------
+// Bots defending in MvM spend their money on upgrades, one at a time - while they're in their spawn
+// with the upgrade station, or anywhere between waves
+void CTFBotManager::UpdateMvMDefenderUpgrades( void )
+{
+	if ( !TFGameRules() || !TFGameRules()->IsMannVsMachineMode() || !tf_bot_mvm_buy_upgrades.GetBool() )
+		return;
+
+	if ( !m_mvmUpgradeTimer.IsElapsed() )
+		return;
+
+	m_mvmUpgradeTimer.Start( 0.5f );
+
+	bool isBetweenWaves = TFObjectiveResource() && TFObjectiveResource()->GetMannVsMachineIsBetweenWaves();
+
+	CUtlVector< CTFPlayer * > defenderVector;
+	CollectPlayers( &defenderVector, TF_TEAM_PVE_DEFENDERS, COLLECT_ONLY_LIVING_PLAYERS );
+
+	FOR_EACH_VEC( defenderVector, i )
+	{
+		CTFBot *bot = ToTFBot( defenderVector[i] );
+		if ( !bot )
+			continue;
+
+		if ( !isBetweenWaves )
+		{
+			CTFNavArea *myArea = bot->GetLastKnownArea();
+			int spawnRoomFlag = bot->GetTeamNumber() == TF_TEAM_RED ? TF_NAV_SPAWN_ROOM_RED : TF_NAV_SPAWN_ROOM_BLUE;
+
+			if ( !myArea || !myArea->HasAttributeTF( spawnRoomFlag ) )
+				continue;
+		}
+
+		// buying an upgrade refreshes our loadout, which would put away a building we're placing
+		CTFWeaponBase *myWeapon = bot->GetActiveTFWeapon();
+		if ( myWeapon && myWeapon->GetWeaponID() == TF_WEAPON_BUILDER )
+			continue;
+
+		BuyMvMUpgrade( bot );
 	}
 }
 
