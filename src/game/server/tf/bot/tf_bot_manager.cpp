@@ -12,6 +12,7 @@
 #include "team.h"
 #include "tf_bot.h"
 #include "tf_gamerules.h"
+#include "tf_obj.h"
 #include "bot/map_entities/tf_bot_hint.h"
 #include "bot/map_entities/tf_bot_hint_sentrygun.h"
 #include "bot/map_entities/tf_bot_hint_teleporter_exit.h"
@@ -29,7 +30,8 @@ ConVar tf_bot_join_after_player( "tf_bot_join_after_player", "1", FCVAR_NONE, "I
 ConVar tf_bot_auto_vacate( "tf_bot_auto_vacate", "1", FCVAR_NONE, "If nonzero, bots will automatically leave to make room for human players." );
 ConVar tf_bot_offline_practice( "tf_bot_offline_practice", "0", FCVAR_NONE, "Tells the server that it is in offline practice mode." );
 ConVar tf_bot_melee_only( "tf_bot_melee_only", "0", FCVAR_GAMEDLL, "If nonzero, TFBots will only use melee weapons" );
-ConVar tf_bot_mvm_auto_ready_delay( "tf_bot_mvm_auto_ready_delay", "20", FCVAR_CHEAT, "In MvM, if no players are defending, the defending bots ready up for the next wave after this many seconds" );
+ConVar tf_bot_mvm_auto_ready_delay( "tf_bot_mvm_auto_ready_delay", "20", FCVAR_CHEAT, "In MvM, if no players are defending, the defending bots ready up for the next wave once they've had at least this many seconds to set up, and their engineers' sentries are built" );
+ConVar tf_bot_mvm_auto_ready_max_delay( "tf_bot_mvm_auto_ready_max_delay", "90", FCVAR_CHEAT, "In MvM, if no players are defending, the defending bots ready up for the next wave after this many seconds, even if their engineers' sentries aren't built" );
 
 extern const char *GetRandomBotName( void );
 extern void CreateBotName( int iTeam, int iClassIndex, CTFBot::DifficultyType skill, char* pBuffer, int iBufferSize );
@@ -552,7 +554,7 @@ void CTFBotManager::UpdateMvMDefenderReadyState( void )
 
 	if ( TFGameRules()->State_Get() != GR_STATE_BETWEEN_RNDS )
 	{
-		m_mvmAutoReadyTimer.Invalidate();
+		m_mvmSetupTimer.Invalidate();
 		return;
 	}
 
@@ -600,13 +602,35 @@ void CTFBotManager::UpdateMvMDefenderReadyState( void )
 	}
 	else
 	{
-		// give our engineers time to rebuild, then start the next wave ourselves
-		if ( !m_mvmAutoReadyTimer.HasStarted() )
+		// nobody to wait for - set up, then start the next wave ourselves
+		if ( botVector.Count() == 0 )
 		{
-			m_mvmAutoReadyTimer.Start( tf_bot_mvm_auto_ready_delay.GetFloat() );
+			m_mvmSetupTimer.Invalidate();
+			return;
 		}
 
-		shouldBeReady = m_mvmAutoReadyTimer.IsElapsed();
+		if ( !m_mvmSetupTimer.HasStarted() )
+		{
+			m_mvmSetupTimer.Start();
+		}
+
+		// sentries build instantly between waves, so give our engineers a chance to get theirs up
+		bool areEngineersSetUp = true;
+		FOR_EACH_VEC( botVector, i )
+		{
+			if ( !botVector[i]->IsPlayerClass( TF_CLASS_ENGINEER ) )
+				continue;
+
+			CBaseObject *sentry = botVector[i]->GetObjectOfType( OBJ_SENTRYGUN );
+			if ( !sentry || sentry->IsBuilding() || sentry->IsPlacing() )
+			{
+				areEngineersSetUp = false;
+				break;
+			}
+		}
+
+		float setupTime = m_mvmSetupTimer.GetElapsedTime();
+		shouldBeReady = ( setupTime > tf_bot_mvm_auto_ready_delay.GetFloat() && areEngineersSetUp ) || setupTime > tf_bot_mvm_auto_ready_max_delay.GetFloat();
 	}
 
 	FOR_EACH_VEC( botVector, i )

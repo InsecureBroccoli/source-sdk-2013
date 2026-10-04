@@ -114,7 +114,7 @@ protected:
 
 	void UpdateMvMDefenderReadyState( void );		// bots defending in MvM ready up for the next wave
 	CountdownTimer m_mvmReadyCheckTimer;
-	CountdownTimer m_mvmAutoReadyTimer;
+	IntervalTimer m_mvmSetupTimer;					// how long bots have been defending by themselves, between waves
 
 #ifdef TF_CREEP_MODE
 	void UpdateCreepWaves();

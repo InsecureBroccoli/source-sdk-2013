@@ -16,9 +16,52 @@ ConVar tf_bot_debug_mvm_defend( "tf_bot_debug_mvm_defend", "0", FCVAR_CHEAT, "Sh
 
 
 //---------------------------------------------------------------------------------------------
-// Return the nav area at the given position, or the closest one around it that knows its travel
-// distance to the bomb hatch. Areas the robots can only drop down from (ie: their spawn) can't
-// be reached by walking back from the hatch, so they don't know their distance.
+// Search outward for where the robots' route to the bomb hatch picks up, from somewhere that doesn't
+// know its travel distance to the hatch. The distances were found by walking back from the hatch, so
+// places the robots can only drop down from (ie: their spawn) don't know theirs.
+class CFindMvMRouteStart : public ISearchSurroundingAreasFunctor
+{
+public:
+	CFindMvMRouteStart( void )
+	{
+		m_routeArea = NULL;
+		m_routeLength = FLT_MAX;
+	}
+
+	virtual bool operator() ( CNavArea *baseArea, CNavArea *priorArea, float travelDistanceSoFar )
+	{
+		CTFNavArea *area = (CTFNavArea *)baseArea;
+		float distanceToHatch = area->GetTravelDistanceToBombTarget();
+
+		// take the shortest way to the hatch
+		if ( distanceToHatch >= 0.0f && travelDistanceSoFar + distanceToHatch < m_routeLength )
+		{
+			m_routeArea = area;
+			m_routeLength = travelDistanceSoFar + distanceToHatch;
+		}
+
+		return true;
+	}
+
+	virtual bool ShouldSearch( CNavArea *adjArea, CNavArea *currentArea, float travelDistanceSoFar )
+	{
+		// once an area knows the way to the hatch, there's no need to search past it
+		if ( ( (CTFNavArea *)currentArea )->GetTravelDistanceToBombTarget() >= 0.0f )
+			return false;
+
+		// search the way the robots move - through their spawn's doors (which are only closed to us),
+		// and down any ledge, but not up anything too high to jump
+		return currentArea->ComputeAdjacentConnectionHeightChange( adjArea ) <= TF_PLAYER_JUMP_HEIGHT;
+	}
+
+	CTFNavArea *m_routeArea;
+	float m_routeLength;
+};
+
+
+//---------------------------------------------------------------------------------------------
+// Return the nav area at the given position, or where the robots' route to the bomb hatch picks up
+// from there if it doesn't know its travel distance to the hatch
 static CTFNavArea *FindMvMRouteArea( const Vector &pos )
 {
 	CTFNavArea *area = (CTFNavArea *)TheTFNavMesh()->GetNearestNavArea( pos, false, 1000.0f );
@@ -28,30 +71,11 @@ static CTFNavArea *FindMvMRouteArea( const Vector &pos )
 	if ( area->GetTravelDistanceToBombTarget() >= 0.0f )
 		return area;
 
-	const float searchRange = 1500.0f;
-	const float maxDropDown = 1000.0f;
-	CUtlVector< CNavArea * > nearbyAreaVector;
-	CollectSurroundingAreas( &nearbyAreaVector, area, searchRange, StepHeight, maxDropDown );
+	const float searchRange = 5000.0f;
+	CFindMvMRouteStart findRouteStart;
+	SearchSurroundingAreas( area, findRouteStart, searchRange );
 
-	CTFNavArea *closeArea = NULL;
-	float closeRangeSq = FLT_MAX;
-
-	FOR_EACH_VEC( nearbyAreaVector, i )
-	{
-		CTFNavArea *nearbyArea = (CTFNavArea *)nearbyAreaVector[i];
-
-		if ( nearbyArea->GetTravelDistanceToBombTarget() < 0.0f )
-			continue;
-
-		float rangeSq = ( nearbyArea->GetCenter() - pos ).LengthSqr();
-		if ( rangeSq < closeRangeSq )
-		{
-			closeArea = nearbyArea;
-			closeRangeSq = rangeSq;
-		}
-	}
-
-	return closeArea;
+	return findRouteStart.m_routeArea;
 }
 
 

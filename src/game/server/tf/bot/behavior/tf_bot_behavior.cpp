@@ -1308,8 +1308,9 @@ void CTFBotMainAction::FireWeaponAtEnemy( CTFBot *me )
 		}
 	}
 
-	// if our target is uber'd, most weapons are useless - unless we're in MvM, where invuln tanking is valuable
-	if ( TFGameRules() && !TFGameRules()->IsMannVsMachineMode() )
+	// if our target is uber'd, most weapons are useless - unless we're a robot in MvM, where invuln tanking is valuable
+	// (robots leaving their spawn are uber'd, so don't waste our ammo on them)
+	if ( TFGameRules() && !( TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_INVADERS ) )
 	{
 		CTFPlayer *playerThreat = ToTFPlayer( threat->GetEntity() );
 		if ( playerThreat && playerThreat->m_Shared.IsInvulnerable() )
