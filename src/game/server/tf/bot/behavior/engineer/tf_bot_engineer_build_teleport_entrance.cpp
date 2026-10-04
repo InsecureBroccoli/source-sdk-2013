@@ -11,6 +11,7 @@
 #include "bot/tf_bot.h"
 #include "bot/behavior/engineer/tf_bot_engineer_build_teleport_entrance.h"
 #include "bot/behavior/engineer/tf_bot_engineer_move_to_build.h"
+#include "bot/behavior/scenario/mann_vs_machine/tf_bot_mvm_defend.h"
 #include "bot/behavior/tf_bot_get_ammo.h"
 
 extern ConVar tf_bot_path_lookahead_range;
@@ -43,7 +44,9 @@ ActionResult< CTFBot >	CTFBotEngineerBuildTeleportEntrance::Update( CTFBot *me, 
 {
 	CTeamControlPoint *point = me->GetMyControlPoint();
 	CCaptureZone *zone = me->GetFlagCaptureZone();
-	if ( !point && !zone )
+	bool isDefendingHatch = TFGameRules()->IsMannVsMachineMode() && me->GetTeamNumber() == TF_TEAM_PVE_DEFENDERS;
+
+	if ( !point && !zone && !isDefendingHatch )
 	{
 		// wait until a control point becomes available
 		return Continue();
@@ -88,6 +91,15 @@ ActionResult< CTFBot >	CTFBotEngineerBuildTeleportEntrance::Update( CTFBot *me, 
 		else if ( zone )
 		{
 			m_path.Compute( me, zone->WorldSpaceCenter(), cost );
+		}
+		else
+		{
+			// in MvM, there's no point to head for - head out toward the robots instead
+			CTFNavArea *robotArea = FindMvMDefenseArea( 0.0f );
+			if ( robotArea )
+			{
+				m_path.Compute( me, robotArea->GetCenter(), cost );
+			}
 		}
 	}
 
